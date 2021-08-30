@@ -3,26 +3,26 @@ from flask import make_response, request
 from . import bp as api
 from .models import User, Message
 
-@api.post('/new_user')
-def new_user():
+@api.post('/register')
+def register():
 	body = request.get_json()
-	username = body['username']
-	password = body['password']
-	if username and password:
+	username = body.get('username')
+	password = body.get('password')
+	if username and password and len(username) > 0 and len(password) > 0:
 		if User.from_username(username) is None:
 			user = User(username, password)
 			user.save()
-			return make_response('user created', 200)
+			return make_response({'token': user.get_token()}, 200)
 	else:
 		return make_response('username and password must be provided', 400)
 	return make_response('user already exists', 409)
 
-@api.get('/login')
+@api.post('/login')
 def login():
 	body = request.get_json()
 	username = body.get('username')
 	password = body.get('password')
-	if username and password:
+	if username and password and len(username) > 0 and len(password) > 0:
 		user = User.from_username(username)
 		if not user:
 			return make_response('user does not exist', 404)
@@ -31,12 +31,20 @@ def login():
 		return make_response({'token': user.get_token()}, 200)
 	return make_response('username and password must be provided', 400)
 
+@api.get('/user')
+def get_user():
+	token = request.args.get('token')
+	user = User.from_token(token)
+	if not user:
+		return make_response('user does not exist', 404)
+	return make_response({'id': user.id, 'name': user.username})
+
 @api.post('/message')
 def post_message():
 	body = request.get_json()
 	token = body.get('token')
 	content = body.get('content')
-	if not token or not content:
+	if not token or not content or len(content) == 0:
 		return make_response('token and content must be provided', 400)
 	user = User.from_token(token)
 	if user:
@@ -66,9 +74,8 @@ def patch_message():
 
 @api.delete('/message')
 def delete_message():
-	body = request.get_json()
-	token = body.get('token')
-	message_id = body.get('message_id')
+	token = request.args.get('token')
+	message_id = request.args.get('message_id')
 	if not token or not message_id:
 		return make_response('token and message_id must be provided', 400)
 	user = User.from_token(token)
@@ -84,7 +91,7 @@ def delete_message():
 
 @api.get('/messages')
 def messages():
-	token = request.get_json().get('token')
+	token = request.args.get('token')
 	user = User.from_token(token)
 	if not user:
 		return make_response('invalid or expired token', 401)
